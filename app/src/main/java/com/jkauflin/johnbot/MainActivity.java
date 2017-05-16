@@ -314,6 +314,15 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
             //TYPE_GYROSCOPE, TYPE_LINEAR_ACCELERATION, or TYPE_GRAVITY.
             Log.i(TAG,"sensorManager = "+sensorManager);
 
+            if (sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD) != null){
+                // Success! There's a magnetometer.
+                Log.i(TAG,"Success! There's a magnetometer");
+
+            }
+            else {
+                // Failure! No magnetometer.
+            }
+
         } else {
             errorExit("Error in Text-to-Speech","Initilization Failed!");
         }
