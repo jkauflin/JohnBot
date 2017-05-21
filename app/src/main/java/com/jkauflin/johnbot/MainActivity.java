@@ -50,6 +50,8 @@
  * 2017-05-07 JJK   Modifying to work without a network or cellular connection
  * 2017-05-10 JJK   Working on localization and sensors (to track robot
  *                  position)
+ * 2017-05-20 JJK   Modified to work in disconnected mode if bluetooth was
+ *                  not available
  *============================================================================*/
 package com.jkauflin.johnbot;
 
@@ -150,7 +152,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
     private boolean jokeStarted = false;
     private boolean sleeping = false;
     private boolean silent = false;
-    private boolean disconnected = false;
+    private boolean disconnected = true;
     private boolean userIdentification = false;
     private String userName = "";
 
@@ -165,7 +167,8 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
                 // Instantiate the bluetood services object
                 btServices = new BluetoothServices(mHandler);
             } catch (Exception e) {
-                errorExit("Error in Bluetooth services",e.getMessage());
+                //errorExit("Error in Bluetooth services",e.getMessage());
+                btServices = null;
             }
         }
 
@@ -277,7 +280,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
             }
             @Override
             public void onError(String utteranceId) {
-                // There was an error.
+                Log.i(TAG,"Error in TTS");
             }
         });
     } // public void restartTTS() {
@@ -303,12 +306,37 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
             // Make sure volume is good
             audioManager.setStreamVolume(AudioManager.STREAM_MUSIC,audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)-3,0);
 
+            // Connect to robot over bluetooth (if bluetooth services are available)
+            try {
+                if (btServices != null) {
+                    Log.d(TAG, "onResume - connect Bluetooth");
+                    // Only if the state is STATE_NONE, do we know that we haven't started already
+                    if (btServices.getState() != BluetoothServices.STATE_CONNECTED) {
+                        // Start the Bluetooth chat services
+                        tv.append("*** Connecting ***\n");
+                        btServices.connect();
+                        disconnected = false;
+                    }
+                }
+            } catch (Exception e) {
+                disconnected = true;
+                Log.e(TAG,"Error connecting ",e);
+                Toast.makeText(getBaseContext(), "Error connecting, "+e.getMessage(), Toast.LENGTH_LONG).show();
+                try {
+                    if (btServices != null) {
+                        btServices.close();
+                    }
+                } catch (Exception e2) {
+                    //errorExit("Fatal Error", "In onPause() and failed to close socket." + e2.getMessage() + ".");
+                }
+            }
+
             // Run the HELLO logic after a short delay (to give initialization a chance to finish, and make sure it is connected)
             helloStartHandler.postDelayed(helloStart,HEALTH_CHECK_INTERVAL_MS);
 
 
             // *** Other initializations ***
-
+            /*
             sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
             List<Sensor> deviceSensors = sensorManager.getSensorList(Sensor.TYPE_ALL);
             //TYPE_GYROSCOPE, TYPE_LINEAR_ACCELERATION, or TYPE_GRAVITY.
@@ -322,6 +350,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
             else {
                 // Failure! No magnetometer.
             }
+            */
 
         } else {
             errorExit("Error in Text-to-Speech","Initilization Failed!");
@@ -330,11 +359,13 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
 
     private final Runnable helloStart = new Runnable() {
         public void run() {
+
             // Give hello message and go into user identification mode
             Log.i(TAG,"Saying HELLO");
             // Count on the restart listening at the end of the HELLO utterance
             speak("Hello, I am the john bot.  What is your name?");
             userIdentification = true;
+
 
             // Start the health check handler
             healthCheckHandler.postDelayed(healthCheck,HEALTH_CHECK_INTERVAL_MS);
@@ -348,31 +379,8 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
         super.onResume();
         isPaused = false;
 
-        try {
-            if (btServices != null) {
-                Log.d(TAG, "onResume - connect Bluetooth");
-                // Only if the state is STATE_NONE, do we know that we haven't started already
-                if (btServices.getState() != BluetoothServices.STATE_CONNECTED) {
-                    // Start the Bluetooth chat services
-                    btServices.connect();
-                    tv.append("*** Connecting ***\n");
-                }
-            }
-
-            Log.d(TAG,"onResume start TTS");
-            restartTTS();
-
-        } catch (Exception e) {
-            Log.e(TAG,"Error connecting ",e);
-            Toast.makeText(getBaseContext(), "Error connecting, "+e.getMessage(), Toast.LENGTH_LONG).show();
-            try {
-                if (btServices != null) {
-                    btServices.close();
-                }
-            } catch (Exception e2) {
-                //errorExit("Fatal Error", "In onPause() and failed to close socket." + e2.getMessage() + ".");
-            }
-        }
+        Log.d(TAG,"onResume start TTS");
+        restartTTS();
 
     } // public void onResume() {
 
@@ -831,6 +839,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
     // Send a command message to the arduino robot controller (through the bluetooth services)
     //==============================================================================================
     private void sendCommand(String message) {
+        Log.d(TAG,"disconnected = "+disconnected);
         try {
             // If disconnected, do not send any commands to the robot hardware
             if (disconnected) {
