@@ -67,11 +67,18 @@ public class DatabaseHandler extends SQLiteOpenHelper {
         jsonData = inJsonData;
     }
 
-    // Method called from Constructor when a new database version is detected
+    // Method called from Constructor when a lower database version is detected
+    // It will do nothing
+    @Override
+    public void onDowngrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        Log.d(TAG, "DB onDowngrade, oldVersion = " + oldVersion + ", newVerion = " + newVersion);
+    }
+
+        // Method called from Constructor when a new database version is detected
     // It will drop tables and call onCreate to re-create and re-load
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        Log.i(TAG,"DB onUpgrade, oldVersion = "+oldVersion+", newVerion = "+newVersion);
+        Log.d(TAG,"DB onUpgrade, oldVersion = "+oldVersion+", newVerion = "+newVersion);
 
         try {
             JSONArray tableList = jsonData.getJSONArray("tableList");

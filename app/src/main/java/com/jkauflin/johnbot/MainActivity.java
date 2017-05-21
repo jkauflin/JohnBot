@@ -51,7 +51,7 @@
  * 2017-05-10 JJK   Working on localization and sensors (to track robot
  *                  position)
  * 2017-05-20 JJK   Modified to work in disconnected mode if bluetooth was
- *                  not available
+ *                  not available, and work if no network is available
  *============================================================================*/
 package com.jkauflin.johnbot;
 
@@ -146,6 +146,8 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
     private BluetoothServices btServices = null;
     private DatabaseHandler db = null;
     private SensorManager sensorManager = null;
+    private JsonObjectRequest jsonObjectReq = null;
+    private int databaseVersion = 0;
 
     private boolean textToSpeech = false;
     private boolean repeatSpeech = false;
@@ -161,16 +163,6 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
         Log.d(TAG,"onCreate - MainActivity");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
-        if (savedInstanceState == null) {
-            try {
-                // Instantiate the bluetood services object
-                btServices = new BluetoothServices(mHandler);
-            } catch (Exception e) {
-                //errorExit("Error in Bluetooth services",e.getMessage());
-                btServices = null;
-            }
-        }
 
         // Get the text view on the layout to post log messages
         this.tv = (TextView) this.findViewById(R.id.textViewWithScroll);
@@ -194,7 +186,83 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
         // Get data from a website and load into a local datatbase
         loadData(DATA_URL);
 
+        try {
+            // Instantiate the bluetood services object
+            btServices = new BluetoothServices(mHandler);
+        } catch (Exception e) {
+            //errorExit("Error in Bluetooth services",e.getMessage());
+            Log.e(TAG,"Error in Bluetooth services",e);
+            btServices = null;
+        }
+
     } // protected void onCreate(Bundle savedInstanceState) {
+
+    @Override
+    public void onResume() {
+        Log.d(TAG, "...onResume - MainActivity");
+        super.onResume();
+        isPaused = false;
+
+        Log.d(TAG,"onResume start TTS");
+        // TTS plus other initializations
+        restartTTS();
+
+    } // public void onResume() {
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        Log.d(TAG, "...In onPause()...");
+        isPaused = true;
+        try {
+            if (speech != null) {
+                speech.destroy();
+                speech = null;
+            }
+            if (tts != null) {
+                tts.stop();
+                tts.shutdown();
+                tts = null;
+            }
+            if (btServices != null) {
+                btServices.close();
+            }
+        } catch (Exception e2) {
+            //errorExit("Fatal Error", "In onPause() and failed to close socket." + e2.getMessage() + ".");
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        if (speech != null) {
+            speech.destroy();
+            speech = null;
+        }
+        if (tts != null) {
+            tts.stop();
+            tts.shutdown();
+            tts = null;
+        }
+        if (btServices != null) {
+            btServices.close();
+            btServices = null;
+        }
+        if (db != null) {
+            db.close();
+            db = null;
+        }
+        super.onDestroy();
+    }
+
+    private void errorExit(String title, String message){
+        Log.e(TAG,title + " - " + message);
+        Toast.makeText(getBaseContext(), title + " - " + message, Toast.LENGTH_LONG).show();
+        finish();
+    }
+    private void errorLog(String title, String message){
+        Log.e(TAG,title + " - " + message);
+        Toast.makeText(getBaseContext(), title + " - " + message, Toast.LENGTH_LONG).show();
+    }
 
     // This runnable will schedule itself to run at 1 second intervals
     // if mShouldRun is set true.
@@ -220,7 +288,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
 
     public void loadData(String url){
         String REQUEST_TAG = "com.jkauflin.johnbot.volleyJsonObjectRequest";
-        JsonObjectRequest jsonObjectReq = new JsonObjectRequest(url, null,
+        jsonObjectReq = new JsonObjectRequest(url, null,
                 new Response.Listener<JSONObject>() {
                     @Override
                     public void onResponse(JSONObject jsonData) {
@@ -234,7 +302,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
                                     errorLog("Get database version","DB version is not set");
                                 } else {
                                     tv.append("*** Loading data ***\n");
-                                    int databaseVersion = Integer.parseInt(versionStr);
+                                    databaseVersion = Integer.parseInt(versionStr);
                                     db = new DatabaseHandler(getApplicationContext(),databaseVersion,jsonData);
                                     db.loadJokeIdList();
                                 }
@@ -247,7 +315,12 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
                 }, new Response.ErrorListener() {
             @Override
             public void onErrorResponse(VolleyError e) {
-                errorLog("Error in Volley HttpRequest",e.getMessage());
+                errorLog("Error in Volley HttpRequest for loadData",e.getMessage());
+                // Create database objects for existing database
+                tv.append("*** Loading data ***\n");
+                JSONObject jsonData = null;
+                db = new DatabaseHandler(getApplicationContext(),1,jsonData);
+                db.loadJokeIdList();
             }
         });
         // Adding JsonObject request to request queue
@@ -285,7 +358,9 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
         });
     } // public void restartTTS() {
 
+    //==============================================================================================
     // Method to check the TTS initialization - and start other initializations
+    //==============================================================================================
     @Override
     public void onInit(int status) {
         if (status == TextToSpeech.SUCCESS) {
@@ -373,71 +448,6 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
     };
 
 
-    @Override
-    public void onResume() {
-        Log.d(TAG, "...onResume - MainActivity");
-        super.onResume();
-        isPaused = false;
-
-        Log.d(TAG,"onResume start TTS");
-        restartTTS();
-
-    } // public void onResume() {
-
-    @Override
-    public void onPause() {
-        super.onPause();
-        Log.d(TAG, "...In onPause()...");
-        isPaused = true;
-        try {
-            if (speech != null) {
-                speech.destroy();
-                speech = null;
-            }
-            if (tts != null) {
-                tts.stop();
-                tts.shutdown();
-                tts = null;
-            }
-            if (btServices != null) {
-                btServices.close();
-            }
-        } catch (Exception e2) {
-            //errorExit("Fatal Error", "In onPause() and failed to close socket." + e2.getMessage() + ".");
-        }
-    }
-
-    @Override
-    public void onDestroy() {
-        if (speech != null) {
-            speech.destroy();
-            speech = null;
-        }
-        if (tts != null) {
-            tts.stop();
-            tts.shutdown();
-            tts = null;
-        }
-        if (btServices != null) {
-            btServices.close();
-            btServices = null;
-        }
-        if (db != null) {
-            db.close();
-            db = null;
-        }
-        super.onDestroy();
-    }
-
-    private void errorExit(String title, String message){
-        Log.e(TAG,title + " - " + message);
-        Toast.makeText(getBaseContext(), title + " - " + message, Toast.LENGTH_LONG).show();
-        finish();
-    }
-    private void errorLog(String title, String message){
-        Log.e(TAG,title + " - " + message);
-        Toast.makeText(getBaseContext(), title + " - " + message, Toast.LENGTH_LONG).show();
-    }
 
     //=============================================================================================
     // Methods needed to implement RecognitionListener (for SpeechRecognizer)
@@ -586,10 +596,12 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
                     // Start the Bluetooth chat services
                     btServices.connect();
                     tv.append("*** Connecting ***\n");
+                    disconnected = false;
+                    speak("I am reconnecting.");
                 }
+            } else {
+                speak("I cannot connect at this time.");
             }
-            disconnected = false;
-            speak("I am reconnecting.");
 
         } else if (command.contains("be quiet") || command.contains("silent mode on")) {
             silent = true;
@@ -839,7 +851,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
     // Send a command message to the arduino robot controller (through the bluetooth services)
     //==============================================================================================
     private void sendCommand(String message) {
-        Log.d(TAG,"disconnected = "+disconnected);
+        //Log.d(TAG,"JJK ***** disconnected = "+disconnected);
         try {
             // If disconnected, do not send any commands to the robot hardware
             if (disconnected) {
