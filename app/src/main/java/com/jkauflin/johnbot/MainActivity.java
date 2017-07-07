@@ -964,6 +964,22 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
         }
     };
 
+    /*
+07-07 18:30:35.855 28409-28409/com.jkauflin.johnbot E/AndroidRuntime: FATAL EXCEPTION: main
+        Process: com.jkauflin.johnbot, PID: 28409
+        java.lang.NullPointerException: Attempt to invoke virtual method 'int android.speech.tts.TextToSpeech.speak(java.lang.CharSequence, int, android.os.Bundle, java.lang.String)' on a null object reference
+        at com.jkauflin.johnbot.MainActivity.speak(MainActivity.java:837)
+        at com.jkauflin.johnbot.MainActivity.access$800(MainActivity.java:92)
+        at com.jkauflin.johnbot.MainActivity$5.run(MainActivity.java:441)
+        at android.os.Handler.handleCallback(Handler.java:746)
+        at android.os.Handler.dispatchMessage(Handler.java:95)
+        at android.os.Looper.loop(Looper.java:148)
+        at android.app.ActivityThread.main(ActivityThread.java:5491)
+        at java.lang.reflect.Method.invoke(Native Method)
+        at com.android.internal.os.ZygoteInit$MethodAndArgsCaller.run(ZygoteInit.java:728)
+        at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:618)
+*/
+    
     public void volleyStringRequest(String url){
         String  REQUEST_TAG = "com.jkauflin.johnbot.volleyStringRequest";
         StringRequest strReq = new StringRequest(url, new Response.Listener<String>() {
@@ -982,3 +998,4 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
     }
 
 } // public class MainActivity extends Activity implements RecognitionListener,TextToSpeech.OnInitListener {
+
