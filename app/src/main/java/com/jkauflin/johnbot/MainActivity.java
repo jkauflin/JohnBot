@@ -978,6 +978,29 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
         at java.lang.reflect.Method.invoke(Native Method)
         at com.android.internal.os.ZygoteInit$MethodAndArgsCaller.run(ZygoteInit.java:728)
         at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:618)
+
+07-05 23:12:33.938 22242-22242/? E/AndroidRuntime: FATAL EXCEPTION: main
+                                                   Process: com.jkauflin.johnbot, PID: 22242
+                                                   java.lang.NullPointerException: Attempt to invoke virtual method 'java.lang.String com.jkauflin.johnbot.DatabaseHandler.getResponse(java.lang.String)' on a null object reference
+                                                       at com.jkauflin.johnbot.MainActivity.onResults(MainActivity.java:719)
+                                                       at android.speech.SpeechRecognizer$InternalListener$1.handleMessage(SpeechRecognizer.java:456)
+                                                       at android.os.Handler.dispatchMessage(Handler.java:102)
+                                                       at android.os.Looper.loop(Looper.java:148)
+                                                       at android.app.ActivityThread.main(ActivityThread.java:5491)
+                                                       at java.lang.reflect.Method.invoke(Native Method)
+                                                       at com.android.internal.os.ZygoteInit$MethodAndArgsCaller.run(ZygoteInit.java:728)
+                                                       at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:618)
+07-05 23:12:55.959 22365-22365/? E/AndroidRuntime: FATAL EXCEPTION: main
+                                                   Process: com.jkauflin.johnbot, PID: 22365
+                                                   java.lang.NullPointerException: Attempt to invoke virtual method 'java.lang.String com.jkauflin.johnbot.DatabaseHandler.getResponse(java.lang.String)' on a null object reference
+                                                       at com.jkauflin.johnbot.MainActivity.onResults(MainActivity.java:719)
+                                                       at android.speech.SpeechRecognizer$InternalListener$1.handleMessage(SpeechRecognizer.java:456)
+                                                       at android.os.Handler.dispatchMessage(Handler.java:102)
+                                                       at android.os.Looper.loop(Looper.java:148)
+                                                       at android.app.ActivityThread.main(ActivityThread.java:5491)
+                                                       at java.lang.reflect.Method.invoke(Native Method)
+                                                       at com.android.internal.os.ZygoteInit$MethodAndArgsCaller.run(ZygoteInit.java:728)
+                                                       at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:618)
 */
     
     public void volleyStringRequest(String url){
