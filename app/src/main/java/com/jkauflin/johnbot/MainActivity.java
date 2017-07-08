@@ -120,43 +120,43 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
     private static final int FEET_SPEED_FAST = 120;
     private static final String TURN_AROUND = ""+BOTH_FEET+","+RIGHT_TURN+","+FEET_SPEED_SLOW+",2000";
 
-    private int foot = BOTH_FEET;
-    private int feetDirection = FORWARD;
-    private int feetSpeed = FEET_SPEED_SLOW;
-    private int feetDuration = 0;
+    private static int foot = BOTH_FEET;
+    private static int feetDirection = FORWARD;
+    private static int feetSpeed = FEET_SPEED_SLOW;
+    private static int feetDuration = 0;
 
     private Button stopButton;
     private Button armButton;
     private Button eyesButton;
     private TextView tv;
 
-    public AudioManager audioManager = null;
-    public int originalVolume = 0;
+    public static AudioManager audioManager = null;
+    public static int originalVolume = 0;
 
     private static SpeechRecognizer speech = null;
-    private Intent recognizerIntent;
-    private boolean isSpeechRecognizerAlive = false;
-    private boolean isPaused = false;
+    private static Intent recognizerIntent;
+    private static boolean isSpeechRecognizerAlive = false;
+    private static boolean isPaused = false;
 
-    private final Handler helloStartHandler = new Handler();
-    private final Handler healthCheckHandler = new Handler();
+    private static final Handler helloStartHandler = new Handler();
+    private static final Handler healthCheckHandler = new Handler();
     private static final int HEALTH_CHECK_INTERVAL_MS = 4000;  // Every 4 seconds
 
-    private TextToSpeech tts;
-    private BluetoothServices btServices = null;
+    private static TextToSpeech tts;
+    private static BluetoothServices btServices = null;
     private DatabaseHandler db = null;
-    private SensorManager sensorManager = null;
-    private JsonObjectRequest jsonObjectReq = null;
-    private int databaseVersion = 0;
+    private static SensorManager sensorManager = null;
+    private static JsonObjectRequest jsonObjectReq = null;
+    private static int databaseVersion = 0;
 
-    private boolean textToSpeech = false;
-    private boolean repeatSpeech = false;
-    private boolean jokeStarted = false;
-    private boolean sleeping = false;
-    private boolean silent = false;
-    private boolean disconnected = true;
-    private boolean userIdentification = false;
-    private String userName = "";
+    private static boolean textToSpeech = false;
+    private static boolean repeatSpeech = false;
+    private static boolean jokeStarted = false;
+    private static boolean sleeping = false;
+    private static boolean silent = false;
+    private static boolean disconnected = true;
+    private static boolean userIdentification = false;
+    private static String userName = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -184,6 +184,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
 
         // Get data from a website and load into a local datatbase
+        // (start the load one time in the create and give it time to load while the Inits run
         loadData(DATA_URL);
 
         try {
@@ -203,7 +204,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
         super.onResume();
         isPaused = false;
 
-        Log.d(TAG,"onResume start TTS");
+        Log.d(TAG,"onResume start TTS (and other initializations)");
         // TTS plus other initializations
         restartTTS();
 
@@ -288,6 +289,14 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
 
     public void loadData(String url){
         String REQUEST_TAG = "com.jkauflin.johnbot.volleyJsonObjectRequest";
+
+        // Create database objects for existing database
+        Log.d(TAG,"Loading data (PRE-LOAD)");
+        //JSONObject jsonData;
+
+        db = new DatabaseHandler(getApplicationContext(),1,null);
+        db.loadJokeIdList();
+
         jsonObjectReq = new JsonObjectRequest(url, null,
                 new Response.Listener<JSONObject>() {
                     @Override
@@ -302,6 +311,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
                                     errorLog("Get database version","DB version is not set");
                                 } else {
                                     tv.append("*** Loading data ***\n");
+                                    Log.d(TAG,"Loading data");
                                     databaseVersion = Integer.parseInt(versionStr);
                                     db = new DatabaseHandler(getApplicationContext(),databaseVersion,jsonData);
                                     db.loadJokeIdList();
@@ -316,11 +326,6 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
             @Override
             public void onErrorResponse(VolleyError e) {
                 errorLog("Error in Volley HttpRequest for loadData",e.getMessage());
-                // Create database objects for existing database
-                tv.append("*** Loading data ***\n");
-                JSONObject jsonData = null;
-                db = new DatabaseHandler(getApplicationContext(),1,jsonData);
-                db.loadJokeIdList();
             }
         });
         // Adding JsonObject request to request queue
@@ -409,9 +414,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
             // Run the HELLO logic after a short delay (to give initialization a chance to finish, and make sure it is connected)
             helloStartHandler.postDelayed(helloStart,HEALTH_CHECK_INTERVAL_MS);
 
-
             // *** Other initializations ***
-            /*
             sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
             List<Sensor> deviceSensors = sensorManager.getSensorList(Sensor.TYPE_ALL);
             //TYPE_GYROSCOPE, TYPE_LINEAR_ACCELERATION, or TYPE_GRAVITY.
@@ -422,25 +425,19 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
                 Log.i(TAG,"Success! There's a magnetometer");
 
             }
-            else {
-                // Failure! No magnetometer.
-            }
-            */
 
         } else {
             errorExit("Error in Text-to-Speech","Initilization Failed!");
         }
-    }
+    } // public void onInit(int status) {
 
     private final Runnable helloStart = new Runnable() {
         public void run() {
-
-            // Give hello message and go into user identification mode
+            // Speak hello message and go into user identification mode
             Log.i(TAG,"Saying HELLO");
             // Count on the restart listening at the end of the HELLO utterance
             speak("Hello, I am the john bot.  What is your name?");
             userIdentification = true;
-
 
             // Start the health check handler
             healthCheckHandler.postDelayed(healthCheck,HEALTH_CHECK_INTERVAL_MS);
@@ -563,7 +560,10 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
     @Override
     public void onResults(Bundle results) {
         ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-        String command = matches.get(0).toLowerCase();
+        String command = "";
+        if (matches != null) {
+            command = matches.get(0).toLowerCase();
+        }
 
         // Boolean to track if text-to-speech is being used (to delay restart of speech listener)
         textToSpeech = false;
@@ -717,6 +717,14 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
             speak(db.getJokeQuestion());
         } else {
             response = db.getResponse(command);
+            // null
+            /*
+            07-05 23:12:55.959 22365-22365/? E/AndroidRuntime: FATAL EXCEPTION: main
+                                                   Process: com.jkauflin.johnbot, PID: 22365
+                                                   java.lang.NullPointerException: Attempt to invoke virtual method 'java.lang.String com.jkauflin.johnbot.DatabaseHandler.getResponse(java.lang.String)' on a null object reference
+                                                       at com.jkauflin.johnbot.MainActivity.onResults(MainActivity.java:719)
+
+             */
             if (response.isEmpty()) {
                 response = "I don't understand that.";
             }
@@ -763,7 +771,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
     //=============================================================================================
     // Method to execute and animated speech (text-to-speech and robotic motions)
     //=============================================================================================
-    private void speak(String messageToSpeak) {
+    private static void speak(String messageToSpeak) {
         String eyesStr = "";
         String headStr = "";
         String armStr = "";
@@ -834,7 +842,15 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
 
             //audioManager.setStreamVolume(AudioManager.STREAM_MUSIC,audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)-3,0);
 
-            tts.speak(messageToSpeak, TextToSpeech.QUEUE_FLUSH, null, "UtteranceId");
+            if (tts != null) {
+                tts.speak(messageToSpeak, TextToSpeech.QUEUE_FLUSH, null, "UtteranceId");
+            }
+            /*
+07-07 18:30:35.855 28409-28409/com.jkauflin.johnbot E/AndroidRuntime: FATAL EXCEPTION: main
+        Process: com.jkauflin.johnbot, PID: 28409
+        java.lang.NullPointerException: Attempt to invoke virtual method 'int android.speech.tts.TextToSpeech.speak(java.lang.CharSequence, int, android.os.Bundle, java.lang.String)' on a null object reference
+        at com.jkauflin.johnbot.MainActivity.speak(MainActivity.java:837)
+             */
             sendCommand(eyesStr+headStr+armStr);
         /*
         sendCommand("E,600,100,600,40,400,40,900,1000,600,40,400,40,600,40,600;");
@@ -850,7 +866,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
     //==============================================================================================
     // Send a command message to the arduino robot controller (through the bluetooth services)
     //==============================================================================================
-    private void sendCommand(String message) {
+    private static void sendCommand(String message) {
         //Log.d(TAG,"JJK ***** disconnected = "+disconnected);
         try {
             // If disconnected, do not send any commands to the robot hardware
@@ -898,6 +914,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
     //==============================================================================================
     // The handler that responds to messages sent by the arduino robot controller (over bluetooth)
     //==============================================================================================
+    // https://stackoverflow.com/questions/37188519/this-handler-class-should-be-static-or-leaks-might-occurasyncqueryhandler
     private final Handler mHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
@@ -964,51 +981,12 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
         }
     };
 
-    /*
-07-07 18:30:35.855 28409-28409/com.jkauflin.johnbot E/AndroidRuntime: FATAL EXCEPTION: main
-        Process: com.jkauflin.johnbot, PID: 28409
-        java.lang.NullPointerException: Attempt to invoke virtual method 'int android.speech.tts.TextToSpeech.speak(java.lang.CharSequence, int, android.os.Bundle, java.lang.String)' on a null object reference
-        at com.jkauflin.johnbot.MainActivity.speak(MainActivity.java:837)
-        at com.jkauflin.johnbot.MainActivity.access$800(MainActivity.java:92)
-        at com.jkauflin.johnbot.MainActivity$5.run(MainActivity.java:441)
-        at android.os.Handler.handleCallback(Handler.java:746)
-        at android.os.Handler.dispatchMessage(Handler.java:95)
-        at android.os.Looper.loop(Looper.java:148)
-        at android.app.ActivityThread.main(ActivityThread.java:5491)
-        at java.lang.reflect.Method.invoke(Native Method)
-        at com.android.internal.os.ZygoteInit$MethodAndArgsCaller.run(ZygoteInit.java:728)
-        at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:618)
-
-07-05 23:12:33.938 22242-22242/? E/AndroidRuntime: FATAL EXCEPTION: main
-                                                   Process: com.jkauflin.johnbot, PID: 22242
-                                                   java.lang.NullPointerException: Attempt to invoke virtual method 'java.lang.String com.jkauflin.johnbot.DatabaseHandler.getResponse(java.lang.String)' on a null object reference
-                                                       at com.jkauflin.johnbot.MainActivity.onResults(MainActivity.java:719)
-                                                       at android.speech.SpeechRecognizer$InternalListener$1.handleMessage(SpeechRecognizer.java:456)
-                                                       at android.os.Handler.dispatchMessage(Handler.java:102)
-                                                       at android.os.Looper.loop(Looper.java:148)
-                                                       at android.app.ActivityThread.main(ActivityThread.java:5491)
-                                                       at java.lang.reflect.Method.invoke(Native Method)
-                                                       at com.android.internal.os.ZygoteInit$MethodAndArgsCaller.run(ZygoteInit.java:728)
-                                                       at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:618)
-07-05 23:12:55.959 22365-22365/? E/AndroidRuntime: FATAL EXCEPTION: main
-                                                   Process: com.jkauflin.johnbot, PID: 22365
-                                                   java.lang.NullPointerException: Attempt to invoke virtual method 'java.lang.String com.jkauflin.johnbot.DatabaseHandler.getResponse(java.lang.String)' on a null object reference
-                                                       at com.jkauflin.johnbot.MainActivity.onResults(MainActivity.java:719)
-                                                       at android.speech.SpeechRecognizer$InternalListener$1.handleMessage(SpeechRecognizer.java:456)
-                                                       at android.os.Handler.dispatchMessage(Handler.java:102)
-                                                       at android.os.Looper.loop(Looper.java:148)
-                                                       at android.app.ActivityThread.main(ActivityThread.java:5491)
-                                                       at java.lang.reflect.Method.invoke(Native Method)
-                                                       at com.android.internal.os.ZygoteInit$MethodAndArgsCaller.run(ZygoteInit.java:728)
-                                                       at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:618)
-*/
-    
     public void volleyStringRequest(String url){
         String  REQUEST_TAG = "com.jkauflin.johnbot.volleyStringRequest";
         StringRequest strReq = new StringRequest(url, new Response.Listener<String>() {
             @Override
             public void onResponse(String response) {
-                Log.d(TAG, response.toString());
+                Log.d(TAG, response);
             }
         }, new Response.ErrorListener() {
             @Override
