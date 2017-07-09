@@ -47,6 +47,7 @@ import org.json.JSONObject;
 public class DatabaseHandler extends SQLiteOpenHelper {
     private static final String TAG = "databasehandler";
     private static final String DATABASE_NAME = "JohnBot.db";
+    private static int dbVersion = 1;
 
     private Context context;
     private JSONObject jsonData;
@@ -63,6 +64,7 @@ public class DatabaseHandler extends SQLiteOpenHelper {
     public DatabaseHandler(Context appContext, int databaseVersion, JSONObject inJsonData){
         super(appContext, DATABASE_NAME, null, databaseVersion);
         Log.d(TAG,"DB constructor, version = "+databaseVersion);
+        dbVersion = databaseVersion;
         context = appContext;
         jsonData = inJsonData;
     }
@@ -202,59 +204,63 @@ public class DatabaseHandler extends SQLiteOpenHelper {
     }
 
     public String getJokeQuestion() {
-        String question = "";
-        jokeId++;
-        if (jokeId >= jokeCnt) {
-            jokeId = 0;
+        String question = "I don't know any jokes";
+        if (dbVersion > 1 && jokeCnt > 0) {
+            jokeId++;
+            if (jokeId >= jokeCnt) {
+                jokeId = 0;
+            }
+
+            SQLiteDatabase db = this.getReadableDatabase();
+            String selection = "id = ?" ;
+            String[] selectionArgs = {jokeIdList.get(jokeId).toString()};
+            String[] projection = {"question"};
+
+            Cursor cursor = db.query(
+                    "joke",                     // The table to query
+                    projection,                               // The columns to return
+                    selection,                                // The columns for the WHERE clause
+                    selectionArgs,                            // The values for the WHERE clause
+                    null,                                     // don't group the rows
+                    null,                                     // don't filter by row groups
+                    null                                 // The sort order
+            );
+
+            if (cursor != null) {
+                cursor.moveToFirst();
+                question = cursor.getString(0);
+            }
+            cursor.close();
         }
-
-        SQLiteDatabase db = this.getReadableDatabase();
-        String selection = "id = ?" ;
-        String[] selectionArgs = {jokeIdList.get(jokeId).toString()};
-        String[] projection = {"question"};
-
-        Cursor cursor = db.query(
-                "joke",                     // The table to query
-                projection,                               // The columns to return
-                selection,                                // The columns for the WHERE clause
-                selectionArgs,                            // The values for the WHERE clause
-                null,                                     // don't group the rows
-                null,                                     // don't filter by row groups
-                null                                 // The sort order
-        );
-
-        if (cursor != null) {
-            cursor.moveToFirst();
-            question = cursor.getString(0);
-        }
-        cursor.close();
 
         return question;
     }
 
     public String getJokeAnswer() {
-        String answer = "";
+        String answer = "Sorry";
 
-        SQLiteDatabase db = this.getReadableDatabase();
-        String selection = "id = ?" ;
-        String[] selectionArgs = {jokeIdList.get(jokeId).toString()};
-        String[] projection = {"answer"};
+        if (dbVersion > 1 && jokeCnt > 0) {
+            SQLiteDatabase db = this.getReadableDatabase();
+            String selection = "id = ?" ;
+            String[] selectionArgs = {jokeIdList.get(jokeId).toString()};
+            String[] projection = {"answer"};
 
-        Cursor cursor = db.query(
-                "joke",                     // The table to query
-                projection,                               // The columns to return
-                selection,                                // The columns for the WHERE clause
-                selectionArgs,                            // The values for the WHERE clause
-                null,                                     // don't group the rows
-                null,                                     // don't filter by row groups
-                null                                 // The sort order
-        );
+            Cursor cursor = db.query(
+                    "joke",                     // The table to query
+                    projection,                               // The columns to return
+                    selection,                                // The columns for the WHERE clause
+                    selectionArgs,                            // The values for the WHERE clause
+                    null,                                     // don't group the rows
+                    null,                                     // don't filter by row groups
+                    null                                 // The sort order
+            );
 
-        if (cursor != null) {
-            cursor.moveToFirst();
-            answer = cursor.getString(0);
+            if (cursor != null) {
+                cursor.moveToFirst();
+                answer = cursor.getString(0);
+            }
+            cursor.close();
         }
-        cursor.close();
 
         return answer;
     }

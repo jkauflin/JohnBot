@@ -52,12 +52,29 @@
  *                  position)
  * 2017-05-20 JJK   Modified to work in disconnected mode if bluetooth was
  *                  not available, and work if no network is available
+ * 2017-07-07 JJK   Worked on error handling and did a DB pre-load
+ *                  Moved the joke list load to the hello start
+ * 2017-07-08 JJK   Working on position sensor (to keep robot in a circle)
+ *                  Realized this is too big and complex a question to take on.
+ *                  Backing off Android based speed and distance (and other
+ *                  localization concepts) for now - some sites to look at
+ *                  in the future:
+ * http://maephv.blogspot.com/2011/10/android-computing-speed-and-distance.html
+ * https://stackoverflow.com/questions/12926459/calculating-distance-using-linear-acceleration-android
+ * 2017-07-09 JJK   Added "walk around" to execute multiple feet commands
+ *                  Limited the walk and run to 3000ms
+ *                  Removed auto-reconnect - if it can't connect at the start,
+ *                  don't try, count on reconnect command
  *============================================================================*/
 package com.jkauflin.johnbot;
 
 import android.content.Context;
+/*
 import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+*/
 import android.os.SystemClock;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
@@ -82,23 +99,21 @@ import com.android.volley.Response;
 import com.android.volley.VolleyError;
 import com.android.volley.toolbox.JsonObjectRequest;
 import com.android.volley.toolbox.StringRequest;
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+
 public class MainActivity extends Activity implements RecognitionListener,TextToSpeech.OnInitListener {
     private static final String TAG = "johnbot";
-
     // Website from which to get configuration data
     //private static final String DATA_URL = "http://<web site>/getData.php";
     private static final String DATA_URL = "http://johnkauflin.com/getJohnBotDataProxy.php";
     // IFTTT web service request commands
     private static final String IFTTT_JJKWEMO_ON_URL = "https://maker.ifttt.com/trigger/<user key>";
     private static final String IFTTT_JJKWEMO_OFF_URL = "https://maker.ifttt.com/trigger/<user key>";
-
 
     private static final float SPEECH_RATE_SLOW = 0.7f;
     private static final float SPEECH_RATE_NORMAL = 1.0f;
@@ -118,7 +133,9 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
     private static final int FEET_SPEED_SLOW = 50;
     private static final int FEET_SPEED_NORMAL = 80;
     private static final int FEET_SPEED_FAST = 120;
-    private static final String TURN_AROUND = ""+BOTH_FEET+","+RIGHT_TURN+","+FEET_SPEED_SLOW+",2000";
+    private static final String TURN_AROUND = ","+BOTH_FEET+","+RIGHT_TURN+","+FEET_SPEED_SLOW+",2000";
+    private static final String WALK_FORWARD = ","+BOTH_FEET+","+FORWARD+","+FEET_SPEED_SLOW+",2000";
+    private static final String WALK_BACKWARD = ","+BOTH_FEET+","+BACKWARD+","+FEET_SPEED_SLOW+",2000";
 
     private static int foot = BOTH_FEET;
     private static int feetDirection = FORWARD;
@@ -129,6 +146,11 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
     private Button armButton;
     private Button eyesButton;
     private TextView tv;
+    /*
+    private TextView tvX;
+    private TextView tvY;
+    private TextView tvZ;
+    */
 
     public static AudioManager audioManager = null;
     public static int originalVolume = 0;
@@ -145,7 +167,6 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
     private static TextToSpeech tts;
     private static BluetoothServices btServices = null;
     private DatabaseHandler db = null;
-    private static SensorManager sensorManager = null;
     private static JsonObjectRequest jsonObjectReq = null;
     private static int databaseVersion = 0;
 
@@ -154,9 +175,23 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
     private static boolean jokeStarted = false;
     private static boolean sleeping = false;
     private static boolean silent = false;
-    private static boolean disconnected = true;
     private static boolean userIdentification = false;
     private static String userName = "";
+
+    /*
+    private static SensorManager sensorManager = null;
+    private static float homeX;
+    private static float homeY;
+    private static float homeZ;
+    private static boolean homeSet = false;
+    private final float[] mAccelerometerReading = new float[3];
+    private final float[] mMagnetometerReading = new float[3];
+    private final float[] mRotationMatrix = new float[9];
+    private final float[] mOrientationAngles = new float[3];
+
+    Sensor sensorAccelerometer;
+    //Sensor sensorMagnetic;
+    */
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -169,6 +204,11 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
         tv.setMovementMethod(new ScrollingMovementMethod());
         //initializing a blank textview so that we can just append a text later
         tv.setText("");
+        /*
+        this.tvX = (TextView) this.findViewById(R.id.textViewX);
+        this.tvY = (TextView) this.findViewById(R.id.textViewY);
+        this.tvZ = (TextView) this.findViewById(R.id.textViewZ);
+        */
 
         // Add listeners for the buttons
         addListenerOnButton();
@@ -182,6 +222,23 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en-US");
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE,true);
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+
+        // Create sensor objects
+        /*
+        sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        List<Sensor> deviceSensors = sensorManager.getSensorList(Sensor.TYPE_ALL);
+        //TYPE_GYROSCOPE, TYPE_LINEAR_ACCELERATION, or TYPE_GRAVITY.
+        Log.d(TAG,"sensorManager = "+sensorManager);
+        if (sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD) != null){
+            Log.d(TAG,"Success! There's a MAGNETOMETER");
+        }
+        if (sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null){
+            Log.d(TAG,"Success! There's a ACCELEROMETER");
+        }
+        sensorAccelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        //sensorMagnetic = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+        Log.d(TAG,"sensorAccelerometer created");
+        */
 
         // Get data from a website and load into a local datatbase
         // (start the load one time in the create and give it time to load while the Inits run
@@ -204,9 +261,11 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
         super.onResume();
         isPaused = false;
 
+        //====================================================================================
         Log.d(TAG,"onResume start TTS (and other initializations)");
         // TTS plus other initializations
         restartTTS();
+        //====================================================================================
 
     } // public void onResume() {
 
@@ -228,6 +287,12 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
             if (btServices != null) {
                 btServices.close();
             }
+
+            // Don't receive any more updates from either sensor.
+            //sensorManager.unregisterListener(sensorEventListener);
+            //gyroManager.unregisterListener(gyroListener);
+            //accManager.unregisterListener(accListener);
+
         } catch (Exception e2) {
             //errorExit("Fatal Error", "In onPause() and failed to close socket." + e2.getMessage() + ".");
         }
@@ -235,6 +300,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
 
     @Override
     public void onDestroy() {
+        super.onDestroy();
         if (speech != null) {
             speech.destroy();
             speech = null;
@@ -252,7 +318,9 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
             db.close();
             db = null;
         }
-        super.onDestroy();
+
+        // Don't receive any more updates from either sensor.
+        //sensorManager.unregisterListener(sensorEventListener);
     }
 
     private void errorExit(String title, String message){
@@ -292,10 +360,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
 
         // Create database objects for existing database
         Log.d(TAG,"Loading data (PRE-LOAD)");
-        //JSONObject jsonData;
-
         db = new DatabaseHandler(getApplicationContext(),1,null);
-        db.loadJokeIdList();
 
         jsonObjectReq = new JsonObjectRequest(url, null,
                 new Response.Listener<JSONObject>() {
@@ -314,6 +379,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
                                     Log.d(TAG,"Loading data");
                                     databaseVersion = Integer.parseInt(versionStr);
                                     db = new DatabaseHandler(getApplicationContext(),databaseVersion,jsonData);
+                                    // Load the joke list array now
                                     db.loadJokeIdList();
                                 }
                             } catch (final Exception e) {
@@ -344,6 +410,17 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
             public void onStart(String utteranceId) {
                 // Speaking started.
                 //Log.d(TAG,"onStart, utteranceId = "+utteranceId);
+
+                // Should I check the audio level before speaking starts to make sure it's on???
+                // Make sure the audio is at a good volume for Text-To-Speech
+                /*
+                audioManager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
+                // use to set back to original when app is destroyed???
+                originalVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+                Log.d(TAG,">>> onStart Utterance originalVolume = "+originalVolume);
+                // Make sure volume is good
+                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC,audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)-3,0);
+                */
             }
             @Override
             public void onDone(String utteranceId) {
@@ -365,6 +442,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
 
     //==============================================================================================
     // Method to check the TTS initialization - and start other initializations
+    // (wait to do other initializations until the TTS is good)
     //==============================================================================================
     @Override
     public void onInit(int status) {
@@ -376,6 +454,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
                 errorExit("TTS", "This Language is not supported");
             }
 
+            // Show we have TTS capabilities
             tv.append("*** Speaking ***\n");
 
             // Make sure the audio is at a good volume for Text-To-Speech
@@ -395,11 +474,11 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
                         // Start the Bluetooth chat services
                         tv.append("*** Connecting ***\n");
                         btServices.connect();
-                        disconnected = false;
+                        // Trying to connect is done in the btService thread, don't assume it is
+                        // connected here yet.  Check it when trying to send a command.
                     }
                 }
             } catch (Exception e) {
-                disconnected = true;
                 Log.e(TAG,"Error connecting ",e);
                 Toast.makeText(getBaseContext(), "Error connecting, "+e.getMessage(), Toast.LENGTH_LONG).show();
                 try {
@@ -415,21 +494,45 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
             helloStartHandler.postDelayed(helloStart,HEALTH_CHECK_INTERVAL_MS);
 
             // *** Other initializations ***
-            sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-            List<Sensor> deviceSensors = sensorManager.getSensorList(Sensor.TYPE_ALL);
-            //TYPE_GYROSCOPE, TYPE_LINEAR_ACCELERATION, or TYPE_GRAVITY.
-            Log.i(TAG,"sensorManager = "+sensorManager);
-
-            if (sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD) != null){
-                // Success! There's a magnetometer.
-                Log.i(TAG,"Success! There's a magnetometer");
-
-            }
+            /*
+            sensorManager.registerListener(sensorEventListener,sensorAccelerometer,SensorManager.SENSOR_DELAY_NORMAL,SensorManager.SENSOR_DELAY_UI);
+            Log.d(TAG,"sensorManager REGISTERED");
+            */
 
         } else {
             errorExit("Error in Text-to-Speech","Initilization Failed!");
         }
     } // public void onInit(int status) {
+
+    /*
+    public SensorEventListener sensorEventListener = new SensorEventListener() {
+        @Override
+        public void onSensorChanged(SensorEvent event) {
+
+            float x = event.values[0];
+            float y = event.values[1];
+            float z = event.values[2];
+
+            if (!homeSet) {
+                homeSet = true;
+                homeX = x;
+                homeY = y;
+                homeZ = z;
+            }
+
+            //String s = String.format("%.2f", 1.2975118);
+            // m/s2
+            tvX.setText("X Acc: " + String.format("%.2f", homeX - x));
+            tvY.setText("Y Acc: " + String.format("%.2f", homeY - y));
+            tvZ.setText("Z Acc: " + String.format("%.2f", homeZ - z));
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int accuracy) {
+
+        }
+    };
+    */
 
     private final Runnable helloStart = new Runnable() {
         public void run() {
@@ -440,7 +543,8 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
             userIdentification = true;
 
             // Start the health check handler
-            healthCheckHandler.postDelayed(healthCheck,HEALTH_CHECK_INTERVAL_MS);
+            //healthCheckHandler.postDelayed(healthCheck,HEALTH_CHECK_INTERVAL_MS);
+            healthCheckHandler.postDelayed(healthCheck,3000);
         }
     };
 
@@ -586,7 +690,9 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
             userIdentification = false;
 
         } else if (command.equals("disconnect")) {
-            disconnected = true;
+            if (btServices != null) {
+                btServices.close();
+            }
             speak("I am now disconnected.");
         } else if (command.equals("connect") || command.equals("reconnect")) {
             if (btServices != null) {
@@ -596,8 +702,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
                     // Start the Bluetooth chat services
                     btServices.connect();
                     tv.append("*** Connecting ***\n");
-                    disconnected = false;
-                    speak("I am reconnecting.");
+                    speak("I am connecting.");
                 }
             } else {
                 speak("I cannot connect at this time.");
@@ -605,7 +710,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
 
         } else if (command.contains("be quiet") || command.contains("silent mode on")) {
             silent = true;
-        } else if (command.contains("speak again") || command.contains("speak now") || command.contains("silent mode off")) {
+        } else if (command.contains("speak") || command.contains("silent mode off")) {
             silent = false;
             speak("Thank you. I appreciate the ability to communicate.");
 
@@ -617,6 +722,8 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
             speak("Yes.");
             sleeping = false;
             silent = false;
+        } else if (command.contains("that's funny") ||command.contains("that is funny")) {
+            speak("I know.");
 
         } else if (userIdentification) {
             userName = command;
@@ -631,7 +738,9 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
             speak(command);
 
         } else if (jokeStarted) {
-            speak(db.getJokeAnswer());
+            if (db != null) {
+                speak(db.getJokeAnswer());
+            }
             jokeStarted = false;
 
         } else if (command.contains("light on") || command.contains("lights on")) {
@@ -640,12 +749,37 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
         } else if (command.contains("light off") || command.contains("lights off")) {
             volleyStringRequest(IFTTT_JJKWEMO_OFF_URL);
             speak("Plunging into darkness.");
+        } else if (command.contains("joke")) {
+            jokeStarted = true;
+            if (db != null) {
+                speak(db.getJokeQuestion());
+            }
+        } else if (command.contains("arm")) {
+
+            if (command.contains("down")) {
+                sendCommand("A,40;");
+            } else if (command.contains("up")) {
+                sendCommand("A,120;");
+            } else if (command.contains("center")) {
+                sendCommand("A,75;");
+            }
+
         } else if (command.contains("eyes")) {
 
             if (command.contains("flash")) {
                 sendCommand("E,500,40,500,40,500;");
             } else if (command.contains("spartacus")) {
                 sendCommand("E,1100,100,1100,100,600,40,400,40,900;");
+            }
+
+        } else if (command.contains("head")) {
+
+            if (command.contains("left")) {
+                sendCommand("H,20;");
+            } else if (command.contains("right")) {
+                sendCommand("H,140;");
+            } else if (command.contains("center")) {
+                sendCommand("H,78;");
             }
 
         } else if (command.contains("move") || command.contains("walk") || command.contains("run") || command.contains("turn")) {
@@ -659,27 +793,36 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
             foot = BOTH_FEET;
             feetDirection = FORWARD;
             feetSpeed = FEET_SPEED_NORMAL;
-            feetDuration = 10000;
+            feetDuration = 3000;
 
-            if (command.contains("fast") || command.contains("run")) {
-                feetSpeed = FEET_SPEED_FAST;
-            }
-            if (command.contains("backward")) {
-                feetDirection = BACKWARD;
-            }
-            if (command.contains("turn")) {
-                feetDirection = RIGHT_TURN;
-                if (command.contains("left")) {
-                    feetDirection = LEFT_TURN;
+            if (command.contains("walk") && command.contains("around")) {
+                String tempCommand = "F";
+                for (int i = 0; i < 5; i++) {
+                    tempCommand += WALK_FORWARD+TURN_AROUND;
                 }
-                feetSpeed = FEET_SPEED_SLOW;
-                feetDuration = 1000;
-                if (command.contains("around")) {
-                    feetDuration = 2000;
+                tempCommand += ";";
+                sendCommand(tempCommand);
+            } else {
+                if (command.contains("fast") || command.contains("run")) {
+                    feetSpeed = FEET_SPEED_FAST;
                 }
-            }
+                if (command.contains("backward")) {
+                    feetDirection = BACKWARD;
+                }
+                if (command.contains("turn")) {
+                    feetDirection = RIGHT_TURN;
+                    if (command.contains("left")) {
+                        feetDirection = LEFT_TURN;
+                    }
+                    feetSpeed = FEET_SPEED_SLOW;
+                    feetDuration = 1000;
+                    if (command.contains("around")) {
+                        feetDuration = 2000;
+                    }
+                }
 
-            sendCommand("F,"+foot+","+feetDirection+","+feetSpeed+","+feetDuration+";");
+                sendCommand("F,"+foot+","+feetDirection+","+feetSpeed+","+feetDuration+";");
+            }
 
                             /*
                                 sendCommand("F"+
@@ -692,43 +835,31 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
                  */
             // Rotation turns - 1 second at 50 speed is a perfect 90 degrees
 
-        } else if (command.contains("head")) {
-
-            if (command.contains("left")) {
-                sendCommand("H,20;");
-            } else if (command.contains("right")) {
-                sendCommand("H,140;");
-            } else if (command.contains("center")) {
-                sendCommand("H,78;");
-            }
-
-        } else if (command.contains("arm")) {
-
-            if (command.contains("down")) {
-                sendCommand("A,40;");
-            } else if (command.contains("up")) {
-                sendCommand("A,120;");
-            } else if (command.contains("center")) {
-                sendCommand("A,75;");
-            }
-
-        } else if (command.contains("joke")) {
-            jokeStarted = true;
-            speak(db.getJokeQuestion());
         } else {
-            response = db.getResponse(command);
-            // null
+            if (db != null) {
+                response = db.getResponse(command);
+                // null
             /*
+07-08 20:58:34.587 27526-27526/com.jkauflin.johnbot I/johnbot: Command: i
+07-08 20:58:34.588 27526-27526/com.jkauflin.johnbot D/AndroidRuntime: Shutting down VM
+07-08 20:58:34.596 27526-27526/com.jkauflin.johnbot E/AndroidRuntime: FATAL EXCEPTION: main
+                                                                      Process: com.jkauflin.johnbot, PID: 27526
+java.lang.NullPointerException: Attempt to invoke virtual method 'java.lang.String
+com.jkauflin.johnbot.DatabaseHandler.getResponse(java.lang.String)' on a null object reference
+                                               at com.jkauflin.johnbot.MainActivity.onResults(MainActivity.java:798)
+
+
             07-05 23:12:55.959 22365-22365/? E/AndroidRuntime: FATAL EXCEPTION: main
                                                    Process: com.jkauflin.johnbot, PID: 22365
                                                    java.lang.NullPointerException: Attempt to invoke virtual method 'java.lang.String com.jkauflin.johnbot.DatabaseHandler.getResponse(java.lang.String)' on a null object reference
                                                        at com.jkauflin.johnbot.MainActivity.onResults(MainActivity.java:719)
 
              */
-            if (response.isEmpty()) {
-                response = "I don't understand that.";
+                if (response.isEmpty()) {
+                    response = "I don't understand that.";
+                }
+                speak(response);
             }
-            speak(response);
         }
 
         // If NOT executing any text to speech, restart the listener immediately
@@ -867,18 +998,14 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
     // Send a command message to the arduino robot controller (through the bluetooth services)
     //==============================================================================================
     private static void sendCommand(String message) {
-        //Log.d(TAG,"JJK ***** disconnected = "+disconnected);
         try {
-            // If disconnected, do not send any commands to the robot hardware
-            if (disconnected) {
-                return;
-            }
             if (message.length() <= 0) {
                 Log.d(TAG,"Message to send is zero length");
                 return;
             }
 
             // If not connected, try to re-connect
+            /*
             if (btServices.getState() != BluetoothServices.STATE_CONNECTED) {
                 Log.d(TAG,"*** sendCommand NOT CONNECTED - Try re-connect ***");
                 btServices.connect();
@@ -896,6 +1023,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
                 SystemClock.sleep(100);
                 waitCnt++;
             }
+            */
 
             if (btServices.getState() == BluetoothServices.STATE_CONNECTED) {
                 // If actually connected, send the message to the robot (over bluetooth services)
@@ -926,7 +1054,7 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
                 tv.append(msgStr+"\n");
 
                 speak("Hey, I'm walking here!");
-                sendCommand("F,"+TURN_AROUND+","+foot+","+feetDirection+","+feetSpeed+",10000;");
+                sendCommand("S;");
             }
 
                 //String message = (String) msg.obj; //Extract the string from the Message

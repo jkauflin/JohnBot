@@ -16,7 +16,7 @@ public class AppSingleton {
     private static AppSingleton mAppSingletonInstance;
     private RequestQueue mRequestQueue;
     private ImageLoader mImageLoader;
-    private static Context mContext;
+    private Context mContext;
 
     private AppSingleton(Context context) {
         mContext = context;
