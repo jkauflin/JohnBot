@@ -65,9 +65,13 @@
  *                  Limited the walk and run to 3000ms
  *                  Removed auto-reconnect - if it can't connect at the start,
  *                  don't try, count on reconnect command
+ * 2017-07-27 JJK   Working on playing music on a bluetooth device
+ * 2017-09-05 JJK   Final edits before moving away from Android/smartphone as
+ *                  controller (moving to Raspberry Pi)
  *============================================================================*/
 package com.jkauflin.johnbot;
 
+import android.content.ComponentName;
 import android.content.Context;
 /*
 import android.hardware.Sensor;
@@ -75,6 +79,9 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 */
+import android.content.ServiceConnection;
+import android.net.Uri;
+import android.os.IBinder;
 import android.os.SystemClock;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
@@ -170,6 +177,9 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
     private static JsonObjectRequest jsonObjectReq = null;
     private static int databaseVersion = 0;
 
+    private MediaPlayerService player;
+    boolean serviceBound = false;
+
     private static boolean textToSpeech = false;
     private static boolean repeatSpeech = false;
     private static boolean jokeStarted = false;
@@ -252,6 +262,8 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
             Log.e(TAG,"Error in Bluetooth services",e);
             btServices = null;
         }
+
+//        playAudio("https://upload.wikimedia.org/wikipedia/commons/6/6c/Grieg_Lyric_Pieces_Kobold.ogg");
 
     } // protected void onCreate(Bundle savedInstanceState) {
 
@@ -465,6 +477,8 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
             // Make sure volume is good
             audioManager.setStreamVolume(AudioManager.STREAM_MUSIC,audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)-3,0);
 
+            // check mute?
+
             // Connect to robot over bluetooth (if bluetooth services are available)
             try {
                 if (btServices != null) {
@@ -656,6 +670,14 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
         isSpeechRecognizerAlive = false;
     }
 
+    public void playMedia(Uri file) {
+        Intent intent = new Intent(Intent.ACTION_VIEW);
+        intent.setData(file);
+        if (intent.resolveActivity(getPackageManager()) != null) {
+            startActivity(intent);
+        }
+    }
+
     //=============================================================================================
     //
     // Respond to results from the SpeechRecognizer listener
@@ -688,6 +710,11 @@ public class MainActivity extends Activity implements RecognitionListener,TextTo
             repeatSpeech = false;
             jokeStarted = false;
             userIdentification = false;
+
+        } else if (command.contains("music") && command.contains("play")) {
+            Log.d(TAG, "playing music");
+            //playAudio("https://upload.wikimedia.org/wikipedia/commons/6/6c/Grieg_Lyric_Pieces_Kobold.ogg");
+            playMedia(Uri.parse("https://upload.wikimedia.org/wikipedia/commons/6/6c/Grieg_Lyric_Pieces_Kobold.ogg"));
 
         } else if (command.equals("disconnect")) {
             if (btServices != null) {
@@ -1124,6 +1151,38 @@ com.jkauflin.johnbot.DatabaseHandler.getResponse(java.lang.String)' on a null ob
         });
         // Adding String request to request queue
         AppSingleton.getInstance(getApplicationContext()).addToRequestQueue(strReq, REQUEST_TAG);
+    }
+
+    //Binding this Client to the AudioPlayer Service
+    private ServiceConnection serviceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            // We've bound to LocalService, cast the IBinder and get LocalService instance
+            MediaPlayerService.LocalBinder binder = (MediaPlayerService.LocalBinder) service;
+            player = binder.getService();
+            serviceBound = true;
+
+            //Toast.makeText(MainActivity.this, "Service Bound", Toast.LENGTH_SHORT).show();
+            tv.append("*** MediaPlayer service bound ***\n");
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            serviceBound = false;
+        }
+    };
+
+    private void playAudio(String media) {
+        //Check is service is active
+        if (!serviceBound) {
+            Intent playerIntent = new Intent(this, MediaPlayerService.class);
+            playerIntent.putExtra("media", media);
+            startService(playerIntent);
+            bindService(playerIntent, serviceConnection, Context.BIND_AUTO_CREATE);
+        } else {
+            //Service is active
+            //Send media with BroadcastReceiver
+        }
     }
 
 } // public class MainActivity extends Activity implements RecognitionListener,TextToSpeech.OnInitListener {

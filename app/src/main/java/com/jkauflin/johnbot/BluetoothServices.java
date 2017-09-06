@@ -14,16 +14,21 @@
  *============================================================================*/
 package com.jkauflin.johnbot;
 
+import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
+import android.content.Intent;
 import android.os.Handler;
 import android.os.Message;
+import android.os.Parcelable;
+import android.provider.Settings;
 import android.util.Log;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Set;
 import java.util.UUID;
 
 
@@ -48,6 +53,10 @@ public class BluetoothServices {
     private ConnectedThread connectedThread = null;
     private int mState;
 
+    // Return Intent extra
+    public static String EXTRA_DEVICE_ADDRESS = "device_address";
+    private static UUID esinKinUUID;
+
     //---------------------------------------------------------------------------------------------
     // Constructor for BluetoothServices
     // @param handler A Handler to send messages back to the UI Activity
@@ -67,16 +76,29 @@ public class BluetoothServices {
                     //Log.d(TAG, "Bluetooth ON");
                 } else {
                     //Prompt user to turn on Bluetooth
-                /*
-                Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-                startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
-                */
+                    /*
+                    Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+                    startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+                    */
                     throw new RuntimeException("Bluetooth Adapter is not enabled");
                 }
             }
 
+
             // Set up a pointer to the remote node using it's address.
             btDevice = btAdapter.getRemoteDevice(address);
+
+            /*
+                BluetoothSocket tmpSocket = null;
+
+                try {
+                    // Get a BluetoothSocket to connect with the given BluetoothDevice.
+                    // MY_UUID is the app's UUID string, also used in the server code.
+                    tmpSocket = btDevice.createRfcommSocketToServiceRecord(MY_UUID);
+                } catch (IOException e) {
+                    Log.e(TAG, "Socket's create() method failed", e);
+                }
+            */;
 
         } catch (Exception e) {
             Log.e(TAG,"Error getting device from adpater: ",e);
