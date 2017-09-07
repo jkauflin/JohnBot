@@ -1,21 +1,21 @@
 # JohnBot
-JohnBot is my 1st hobby robotics project using an Arduino based robot with an Android smartphone
+JohnBot was my 1st hobby robotics project using an Arduino based robot with an Android smartphone
 functioning as the brain or controller.  The goal was to mimic human interaction:  autonomous movement, 
 speech, and reacting to voice commands.  Another goal was to keep it inexpensive and use standard Android 
 capabilities.  I was trying to learn basic robotic control and what could be done with a smartphone controller 
-(to learn Android development).
+(in order to learn Android development).
 
-For this learning exercise, I am not using any of the popular robotics control frameworks, just my 
+For this learning exercise, I did not use any of the popular robotics control frameworks, just my 
 own concepts for handling serial communication to the Arduino, the processing loop, and translating 
-commands to physical robotic components.  I am using standard Android capabilities for speech 
+commands to physical robotic components.  I used standard Android capabilities for speech 
 recognition, text to speech (TTS), HTTP requests, and bluetooth serial communication.
 
 Here is a link to a YouTube video showing what I got working:
 
-[![IMAGE ALT TEXT HERE](http://img.youtube.com/vi/YOUTUBE_VIDEO_ID_HERE/0.jpg)](http://www.youtube.com/watch?v=YOUTUBE_VIDEO_ID_HERE)
+[![JohnBot 1.0 video on YouTube](https://youtu.be/2T6Ixulm-uI)](https://youtu.be/2T6Ixulm-uI)
 
 ## Hardware
-Here is a list of the hardware I am used for this project:
+Here is a list of the hardware I used for the JohnBot 1.0:
 * Droid Turbo 1 Android smartphone (BRAIN)
 * Arduino Mega
 * [Adafruit mini robot chassis kit - 2WD wtih DC motors](https://www.adafruit.com/products/3216) (FEET)
@@ -29,12 +29,12 @@ Here is a list of the hardware I am used for this project:
 * 4AA battery pack for servo motors
 
 Beyond learning Arduino in general, the two biggest hardware issues I had when first learning robotics 
-were power and the bluetooth controller.  Components like DC motors and servos need good power - strong 
+were power, and the bluetooth controller.  Components like DC motors and servos need good power - strong 
 battery amp power.  They can't be run from the USB power, and I couldn't get the servos to work correctly
 until I gave them their own 4AA battery pack (separate from the one I was using for the DC motors).  Until
 I got the power correct, they would do strange things when given commands.
 
-The HC-06 Bluetooth module was a challenge until I figured out how to execute "AT" commands on it, and
+The HC-06 Bluetooth module was a challenge until I figured out how to execute "AT" commands, and
 get the default command mode changed from 0 (only paired addresses), to 1 (accept all addresses).  That was
 the only default I had to change to get it talking to the Android Bluetooth libraries.  Here are links for 
 HC-06 module documentation and getting to the AT command mode to execute AT commands:
@@ -59,7 +59,7 @@ the arm, and the front parts out of popsicle sticks (gotta love hot glue guns).
 ## Arduino software
 
 I used the standard [Arduino IDE](https://www.arduino.cc/en/Main/Software) to work on the code and upload to
-the Mega.  You can find the code in jjkBot.ino under **arduinoCode** folder.  I included libraries for the
+the Mega.  You can find the code in **jjkBot.ino** under **arduinoCode** folder.  I included libraries for the
 Adafruit_MotorShield to control the DC motors and servos, and the ping library for ultrasonic distance sensor.
 
 The main thing I learned about Arduino programming was not to block the main loop.  You can't do too much 
@@ -110,10 +110,10 @@ I used the standard [Android Studio IDE](https://developer.android.com/studio/in
 Android code with a Droid Turbo 1 smartphone plugged into the USB to run it.  The java classes can be found
 under **app/src/main/java/com.jkauflin.johnbot**.
  
-* **MainActivity** - main controller and logic class for Text to Speech (TTS) and speech recognizer
+* **MainActivity** - main controller, and logic for Text to Speech (TTS) and speech recognizer
 * **BluetoothServices** - class to connect to and communicate to and from the robot bluetooth module
 * **DatabaseHandler** - handle the load and queries to the internal SQLite database
-* **AppSingleton** - singleton class to execute volley HTTP requests
+* **AppSingleton** - singleton class to execute volley HTTP requests (to get data from a web service)
 * **MediaPlayerService** - class to play media files (when I was testing playing MP3's)
 
 I didn't do much with the Android UI, just some buttons to test functions, a scrolling log to show voice
@@ -123,7 +123,7 @@ voice commands, and move around got me into some of the major areas of robotics:
 * **Natural Language Processing (NLP)** - capturing and interpreting language sentences
 * **Localization** - understand the physical world around the robot (position, navigation, dead reconing, etc.)
 
-Most of the things in these areas are well beyond me, but it was fun to explore, learn, and get some 
+Most of the things in these areas are well beyond me, but it was fun to explore, learn, and get some basic  
 functions working.  I played with the Android TTS parameters to get a flat, inflectionless voice that 
 sounded like what I thought a robot would sound like (instead of a more human voice).  The speech recognition 
 was extremely difficult especially when trying to avoid the startup beep.  I went through many web articles 
